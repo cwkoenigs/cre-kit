@@ -1,0 +1,58 @@
+# Example of a completed cre.yaml. You do not write this by hand:
+# `cre init` creates it and the interview fills it. Shown so you can see the
+# whole shape. Values mirror the examples on the Snowflake docs page.
+schema_version: 1
+
+snowflake:
+  connection: dev                 # snow CLI connection name
+  auth: sso                       # sso | keypair | pat | other
+  role: ML_PLATFORM_ADMIN         # needs Create Custom Runtime Environment on the account
+  warehouse: MY_WH
+  registry_url: myorg-myacct.registry.snowflakecomputing.com   # snow spcs image-registry url
+
+image_repo:
+  database: MYDB
+  schema: MYSCHEMA
+  name: MY_REPO
+  create_if_missing: false
+
+base_image:
+  type: CPU                       # CPU | GPU; must match the base image
+  python_version: '3.10'
+  image_path: /snowflake/images/snowflake_images/container_runtime/cpu_x86_64:2.10.0
+
+image:
+  name: my-custom-image
+  tag: v1                         # use a new tag for every build
+
+build:
+  engine: docker                  # docker | podman
+  platform: linux/amd64           # required by Snowflake
+  context_dir: image              # Dockerfile is rendered here
+  pip_packages:
+    - xgboost==2.0.3
+    - scikit-learn==1.3.2
+  pip_index_url: null             # internal index if PyPI is unreachable (no credentials in the URL)
+  pip_extra_index_urls: []
+  ca_bundle: null                 # full CA bundle (PEM) for a TLS-inspecting proxy
+  build_args: {}                  # e.g. {HTTPS_PROXY: "http://proxy:8080"}
+  dockerfile_extra: []            # raw lines; ENTRYPOINT / CMD / FROM are rejected
+
+validation:
+  scan_vulnerabilities: true      # snow custom-image validate --scan-vulnerabilities
+
+cre:
+  name: MY_CRE                    # unquoted identifier, unique in the account
+  replace_existing: false         # true still needs a human `cre run --yes`
+  grant_usage_to: []              # rendered to .cre/out/grants_UNVERIFIED.sql, never executed
+
+smoke_test:
+  enabled: true                   # needs snowflake-ml-python >= 1.37.0 locally
+  compute_pool: MY_COMPUTE_POOL
+  stage_name: payload_stage
+
+loop:
+  watcher_model: claude-opus-5-5
+  runner_model: claude-haiku-5-5
+  max_runner_attempts: 3          # per stage, before the watcher is called
+  max_watcher_rounds: 2           # per stage, before a human is called

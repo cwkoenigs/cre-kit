@@ -1,0 +1,180 @@
+# Question bank for the interview. This file IS the interview: the skill just
+# relays what `cre interview next` returns. If a question is asked badly, or a
+# question is missing, fix it HERE (watcher only) and log it with `cre issue add`.
+#
+# id:     stable handle
+# key:    config key the answer is written to
+# ask:    what to ask the human, in plain words
+# why:    one line on what breaks if this is wrong (shown on request)
+# probe:  optional read-only probe that suggests an answer
+# when:   optional config key that must be truthy for the question to apply
+# optional: true -> the human may skip it
+
+- id: engine
+  key: build.engine
+  ask: Which container engine builds images on this machine, docker or podman?
+  why: Every build, tag and push command is run with this binary.
+  probe: engine
+
+- id: connection
+  key: snowflake.connection
+  ask: Which Snowflake CLI connection should be used?
+  why: All snow commands and the smoke test use this connection.
+  probe: snow_connections
+
+- id: auth
+  key: snowflake.auth
+  ask: How does that connection sign in - sso (browser), keypair (service account), pat, or other?
+  why: SSO needs a person at the keyboard for registry login; key-pair can run unattended.
+  probe: auth
+
+- id: role
+  key: snowflake.role
+  ask: Which role should run this? It needs the Create Custom Runtime Environment privilege on the account and write access to the image repository. Leave empty for the connection default.
+  why: Registration fails with insufficient privileges if the role lacks the account-level privilege.
+  probe: role
+  optional: true
+
+- id: warehouse
+  key: snowflake.warehouse
+  ask: Which warehouse should run the small metadata queries?
+  why: Listing base images is a SELECT and needs a warehouse.
+  probe: warehouse
+
+- id: registry_url
+  key: snowflake.registry_url
+  ask: What is the image registry host for this account?
+  why: Base image pulls and pushes go to this host. A private-link account has a different host than the public one.
+  probe: registry_url
+
+- id: repo_database
+  key: image_repo.database
+  ask: Which database holds the image repository the custom image will be pushed to?
+  why: Part of the push URL and of the CRE IMAGE_PATH.
+  probe: image_repos
+
+- id: repo_schema
+  key: image_repo.schema
+  ask: Which schema holds the image repository?
+  why: Part of the push URL and of the CRE IMAGE_PATH.
+  probe: image_repos
+
+- id: repo_name
+  key: image_repo.name
+  ask: What is the image repository called?
+  why: Part of the push URL and of the CRE IMAGE_PATH.
+  probe: image_repos
+
+- id: repo_create
+  key: image_repo.create_if_missing
+  ask: If that repository does not exist, may this tool create it (true/false)?
+  why: Creating a repository needs CREATE IMAGE REPOSITORY on the schema; many teams want that done by an admin.
+
+- id: base_type
+  key: base_image.type
+  ask: CPU or GPU base image?
+  why: BASE_IMAGE_TYPE must match the base image, and a GPU image needs a GPU compute pool to run.
+
+- id: base_python
+  key: base_image.python_version
+  ask: Which Python version should the image use?
+  why: Base images are specific to hardware and Python version.
+  probe: base_python
+
+- id: base_path
+  key: base_image.image_path
+  ask: Which Snowflake base image path should the custom image extend?
+  why: Every custom image must derive from an official Snowflake ML runtime base image.
+  probe: base_path
+
+- id: image_name
+  key: image.name
+  ask: What should the custom image be called (lowercase, e.g. ds-runtime)?
+  why: Local tag and repository path.
+
+- id: image_tag
+  key: image.tag
+  ask: What tag should this build get? Use a new tag for every build, such as the git short SHA.
+  why: The image digest is checked at run time. Re-pushing a tag after registration gets submissions rejected.
+  probe: git_sha
+
+- id: pip_packages
+  key: build.pip_packages
+  ask: Which Python packages should be baked in? Give pinned specs, comma separated, e.g. xgboost==2.0.3, scikit-learn==1.3.2.
+  why: The environment must resolve with no conflicts against the packages already in the base image.
+  optional: true
+
+- id: pip_index
+  key: build.pip_index_url
+  ask: Does the build have to install from an internal package index instead of public PyPI? If so, what is its URL (no credentials in the URL)?
+  why: If the build cannot reach PyPI, the pip install step fails with a network or not-found error.
+  probe: pip_index
+  optional: true
+
+- id: pip_extra_index
+  key: build.pip_extra_index_urls
+  ask: Any additional package index URLs?
+  why: Internal packages often live on a second index.
+  optional: true
+
+- id: ca_bundle
+  key: build.ca_bundle
+  ask: Does outbound TLS go through an inspecting proxy? If so, give the path to the full CA bundle (PEM) that should be trusted during the build.
+  why: Without it the pip install fails with a certificate verification error.
+  probe: ca_bundle
+  optional: true
+
+- id: build_args
+  key: build.build_args
+  ask: >-
+    Does the build need proxy settings or other build args? Give them as a YAML mapping,
+    e.g. {HTTPS_PROXY: "http://proxy:8080", NO_PROXY: ".corp.example"}.
+  why: Without proxy args the build cannot resolve or reach the package index.
+  probe: proxy
+  optional: true
+
+- id: dockerfile_extra
+  key: build.dockerfile_extra
+  ask: Any extra Dockerfile lines (system packages, org config)? ENTRYPOINT, CMD and FROM are not allowed.
+  why: The entrypoint and DASHBOARD_PORT must stay as the base image sets them or validation fails.
+  optional: true
+
+- id: scan
+  key: validation.scan_vulnerabilities
+  ask: Run the CVE scan during local validation (true/false)?
+  why: Advisory, but regulated environments usually want the scan result on record.
+
+- id: cre_name
+  key: cre.name
+  ask: What should the Custom Runtime Environment be called? Unquoted identifier, unique in the account.
+  why: Jobs and notebooks reference it as cre@<name>.
+
+- id: cre_replace
+  key: cre.replace_existing
+  ask: If a CRE with that name already exists, may it be replaced (true/false)?
+  why: Replacing repoints every job and notebook that uses the name. The run still asks for a human --yes.
+
+- id: cre_grants
+  key: cre.grant_usage_to
+  ask: Which roles should be able to use the CRE? (Rendered as a SQL file for review, not executed.)
+  why: A role needs USAGE on the CRE and access to the image repository.
+  optional: true
+
+- id: smoke_enabled
+  key: smoke_test.enabled
+  ask: After registering, submit a tiny ML Job on the CRE to prove it works (true/false)?
+  why: Registration proves the image validates; only a job proves it runs with your packages.
+  probe: ml_python
+
+- id: smoke_pool
+  key: smoke_test.compute_pool
+  ask: Which compute pool should the smoke test job run on?
+  why: The job needs a pool whose hardware matches the base image type.
+  probe: compute_pools
+  when: smoke_test.enabled
+
+- id: smoke_stage
+  key: smoke_test.stage_name
+  ask: Which stage should hold the smoke test job payload?
+  why: ML Jobs upload their payload to a stage the role can write to.
+  when: smoke_test.enabled
